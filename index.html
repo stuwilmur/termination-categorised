@@ -10,6 +10,7 @@
 
 
 
+
 <!-- Color Scale -->
 <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
 
@@ -65,8 +66,10 @@
 
 </head>
 <body>
-<!-- Initialize a menu for the category -->
-<select id="categoryButton"></select>
+<!-- Initialize menus for the measure and the board -->
+<select id="measureButton">abc</select>
+<select id="boardButton"></select>
+
 
 <!-- Create a div where the graph will take place -->
 <div id="my_dataviz"></div>
@@ -230,43 +233,120 @@ var selectedRegion;
 var yLabel;
 var chartLabel;
 var geojson;
-var measure = 'Age';
-var board = 'S08000020';
+var selectedMeasure = 'Age';
+var selectedBoard = 'S08000020';
+var nestedData;
+var catNestedData;
+var measures;
+var durationTime = 1000; //1s
 
 function optionsAndUpdate()
 {
-	// recover the option that has been chosen
-	var selectedMeasure = d3.select("#categoryButton").property("value")
+	// recover the options that have been chosen
+	selectedMeasure = d3.select("#measureButton").property("value");
+	selectedBoard = d3.select("#boardButton").property("value");
 	// run the updateChart function with this selected option
-	update(selectedRegion, selectedMeasure)
+	update(selectedMeasure, selectedBoard);
 }
 
 // A function that updates the chart
 function update(measure, board) {
 
+	var boardData = nestedData.filter(function(e) 
+	{
+		return e['key'] == board;
+	});
+	var categoryData = boardData[0].values.filter(function(f)
+	{	return f['key'] == measure;
+	})
+	
+	var allCategories = catNestedData.filter(function(f)
+	{    return f['key'] == measure;
+	});
+	
+	var categories = allCategories[0].values.map( function(d) { return d.key; });
+	
+	color = d3.scaleOrdinal()
+			.domain(categories)
+			.range(d3.schemeSet3)
+	
+	var numYears = categoryData[0].values.length;
+	
+	var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
+
+	updateGeo(geojson);
+	
+	var areaGenerator = d3.area()
+	.x(function(d, i) {
+		return xScale(i);
+	})
+	.y0(function(d) {
+		return yScale(d[0]);
+	})
+	.y1(function(d) {
+		return yScale(d[1]);
+	});
+
+   var stacker = d3.stack()
+   .keys(categories)
+	
+	var stackedData = stacker(merged);
+	
+	
+	var yScale = d3.scaleLinear()
+				.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
+				.range([height, 0]);
+			
+	var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth]);
+	
+	console.log(stackedData);
+	
+	var w = d3.select('g').selectAll('path.layers')
+	.data(stackedData)
+	
+	console.log(w.enter());
+	
+	w.enter()
+	.append('path')
+	.merge(w)
+	.transition()
+	.duration(durationTime)
+	.attr('class', 'layers')
+	.style('fill', function(d, i) {
+		return color(d.key);
+	})
+	.attr('d', areaGenerator)
+		
+	w.exit()
+	.transition()
+	.duration(durationTime)
+	.style('fill', 'none')
+	.remove();
 }
 
 // Parse the csv file
 function parseData(d) {
 	
 	d.Year = +d.Year;
-	d.Value = +d.Value;
+	d.Value = d.Value == "*" ? 0 : d.Value = +d.Value; //!! handle the missing data.
 	
 	return d;
 }
 
 
-//Read the data
+//Read and parse the data
 d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup)
 {
 	lookup.reduce(function(map, obj) {
-		codesMap.set(obj.code, obj.name);
+		codesMap.set(obj.HB16CD, obj.HB16NM);
 	}, {});
 	
-	selectedRegion = lookup[0].code;
+	var codesArray = Array.from(codesMap);
 	
 	d3.json('sco_nhs_boards.geojson', function(err, json) {
 		d3.csv("terminations data.csv", parseData, function(theData) {
+		
+			geojson = json;
 		
 			nestedData = d3.nest()
 							.key(function(d) { return d.ID; })
@@ -279,6 +359,39 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 							.key(function(d) { return d.Measure; })
 							.key(function(d) { return d.Group; })
 							.entries(theData);
+							
+			measures = catNestedData.map( function(d) { return d.key; })
+			
+			// add the options to the measures button
+			d3.select('#measureButton')
+				.on('change', function(d) 
+				{
+					optionsAndUpdate();
+					//!!
+				})
+				.selectAll('option')
+				.data(measures)
+				.enter()
+				.append('option')
+				.attr('value', function(d) {return d;})
+				.text(function(d) {return d;});
+				
+			// add the options to the boards button
+			d3.select('#boardButton')
+				.on('change', function(d) 
+				{
+					optionsAndUpdate();
+					//!!
+				})
+				.selectAll('option')
+				.data(codesArray)
+				.enter()
+				.append('option')
+				.attr('value', function(d) {return d[0];})
+				.text(function(d) {return d[1];});
+				
+			var measure = d3.select("#measureButton").property("value");
+			var board = d3.select("#boardButton").property("value");	
 			
 			var boardData = nestedData.filter(function(e) 
 			{
@@ -301,55 +414,45 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 			var numYears = categoryData[0].values.length;
 			
 			var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
-			//console.log(merged);
-				
-			geojson = json;
-		
-			updateGeo(json);
+
+			updateGeo(geojson);
 			
+			/*
+			var areaGenerator = d3.area()
+			.x(function(d, i) {
+				return xScale(i);
+			})
+			.y0(function(d) {
+				return yScale(d[0]);
+			})
+			.y1(function(d) {
+				return yScale(d[1]);
+			});
 
-
-	var areaGenerator = d3.area()
-	.x(function(d, i) {
-		return xScale(i);
-	})
-	.y0(function(d) {
-		return yScale(d[0]);
-	})
-	.y1(function(d) {
-		return yScale(d[1]);
-	});
-
-	var colors = ['#FBB65B', '#513551', '#de3163'];
-	
-	//console.log(data);
-
-   var stacker = d3.stack()
-   .keys(categories)
-	
-	var stackedData = stacker(merged);
-	console.log(stackedData);
-	
-	
-	var yScale = d3.scaleLinear()
-				.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
-				.range([height, 0]);
+		   var stacker = d3.stack()
+		   .keys(categories)
 			
-	var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth])
-	console.log(d3.max(stackedData, d => d3.max(d, d => d[1])));
-	
-
-
-	d3.select('g')
-	.selectAll('path')
-	.data(stackedData)
-	.enter()
-	.append('path')
-	.style('fill', function(d, i) {
-		return color(d.key);
-	})
-	.attr('d', areaGenerator)
-
+			var stackedData = stacker(merged);
+			
+			
+			var yScale = d3.scaleLinear()
+						.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
+						.range([height, 0]);
+					
+			var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth])
+			
+			d3.select('g')
+			.selectAll('path.layers')
+			.data(stackedData)
+			.enter()
+			.append('path')
+			.attr('class', 'layers')
+			.style('fill', function(d, i) {
+				return color(d.key);
+			})
+			.attr('d', areaGenerator)
+			*/
+			optionsAndUpdate();
 			
 		})
 	})
