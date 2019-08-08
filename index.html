@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <title>Scotland termination figures</title>
+ 
+<meta charset="utf-8">
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v4.js"></script>
+
+
+
+<!-- Color Scale -->
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+<!-- Font -->
+<link href="https://fonts.googleapis.com/css?family=Merriweather&display=swap" rel="stylesheet">
+
+<style>
+
+	body {
+		font-family: 'Merriweather', serif;
+
+	}
+	
+	.yaxis {
+		font-family: 'Merriweather', serif;
+	}
+
+	.xaxis {
+	        font-family: 'Merriweather', serif;
+	}
+	
+	.ylabel {
+		font-size : 80%;
+	}
+	
+	.caption {
+		font-size : 120%;
+	}
+	
+	.subcaption {
+		font-size : 80%;
+	}
+	
+	a {
+	text-decoration: none;
+	color : black;
+	}
+
+	a:hover {
+	  text-decoration: underline;
+	}
+
+	a:active {
+	  color: black;
+	}
+
+	a:visited {
+	  color: black;
+}
+
+
+</style>
+
+</head>
+<body>
+<!-- Initialize a menu for the category -->
+<select id="categoryButton"></select>
+
+<!-- Create a div where the graph will take place -->
+<div id="my_dataviz"></div>
+<p class="caption">Termination of pregnancy in Scotland across health board categorised by age, deprivation, estimated gestation,  method and grounds for termination.</p>
+<p class="subcaption">Data from the <a href="https://www.isdscotland.org/Health-Topics/Sexual-Health/Publications/2019-05-28/2019-05-28-Terminations-2018-Report.pdf">Termination of Pregnancy report, Information Services Division Scotland, published 28 May 2019</a>.</p>
+
+<script>
+
+var codesMap = new Map();
+
+// set the dimensions and margins of the graph
+var margin = {top: 20, right: 100, bottom: 30, left: 70},
+    width = 1200 - margin.left - margin.right,
+    height = 600 - margin.top - margin.bottom;
+	chartWidth = width / 2;
+
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+  .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform",
+          "translate(" + margin.left + "," + margin.top + ")");
+		  
+// create a tooltip
+var Tooltip = d3.select("#my_dataviz")
+  .append("div")
+  .style("opacity", 0)
+  .attr("class", "tooltip")
+  .style("background-color", "white")
+  .style("border", "solid")
+  .style("border-width", "1px")
+  .style("border-radius", "0px")
+  .style("padding", "5px")
+  .style("position", "absolute")
+  .style("font-family", "Merriweather")
+  .style("font-size", "80%")
+  
+// create a tooltip for the map
+var mapTooltip = d3.select("#my_dataviz")
+  .append("div")
+  .style("opacity", 0.1)
+  .attr("class", "tooltip")
+  .style("background-color", "white")
+  .style("border", "none")
+  .style("border-width", "1px")
+  .style("border-radius", "0px")
+  .style("padding", "5px")
+  .style("position", "absolute")
+  .style("font-family", "Merriweather")
+  .style("font-size", "80%")
+  
+// Three function that change the tooltip when user hover / move / leave a cell
+var mouseover = function(d) {
+Tooltip
+  .style("opacity", 1)
+}
+
+var mousemove = function(d) {
+Tooltip
+  .html(d.year + ": " + d.value)
+  .style("left", (d3.mouse(this)[0]+70) + "px")
+  .style("top", (d3.mouse(this)[1]) + "px")
+}
+
+var mouseleave = function(d) {
+Tooltip
+  .style("opacity", 0)
+}
+
+// Three function that change the map tooltip when user hover / move / leave a feature
+var mapmouseover = function(d) {
+mapTooltip
+  .style("opacity", 1)
+  
+  d3.select(this)
+	.style('fill', colours.teal)
+	.style("opacity", d.properties.LAD13CD == selectedRegion ? 1 : 0.5)
+}
+
+var mapmousemove = function(d) {
+mapTooltip
+  .html(codesMap.get(d.properties.LAD13CD))
+  .style("left", (d3.mouse(this)[0] + 20) + "px")
+  .style("top", (d3.mouse(this)[1]) + "px")
+}
+
+var mapmouseleave = function(d) {
+mapTooltip
+  .style("opacity", 0)
+  
+  d3.select(this)
+	.style('fill', getRegionColour(d))
+	.style("opacity", 1)
+}
+
+var mapmouseclick = function(d) {
+	selectedRegion = d.properties.LAD13CD;
+	optionsAndUpdate();
+	updateRegionColours();
+}
+
+var categoriesList = [
+	[
+		"age",
+		"Age"
+	]
+];
+
+var firstCategory = categoriesList[0][0];
+
+var categories = new Map(categoriesList);
+
+var projection = d3.geoMercator()
+  .scale(2600)
+  .translate([width, height / 2])
+  .center([-4, 58]);
+
+var geoGenerator = d3.geoPath()
+  .projection(projection);
+
+function getRegionColour(d) { 
+	return d.properties.HB16CD == selectedRegion ? colours.teal : colours.grey;
+}
+
+function updateGeo(geojson) {
+  var u = d3.select('svg')
+    .selectAll('path')
+    .data(geojson.features);
+
+	u.enter()
+    .append('path')
+	.attr("class", "region")
+    .attr('d', geoGenerator)
+	.style("fill", getRegionColour)
+	.on("mouseover", mapmouseover)
+	.on("mousemove", mapmousemove)
+	.on("mouseleave", mapmouseleave)
+	.on("click", mapmouseclick)
+}
+
+function updateRegionColours()
+{
+	  var u = d3.select('svg')
+    .selectAll('path.region')
+	.transition()
+	.duration(500)
+	.style("opacity", 1)
+	.style("fill", getRegionColour);
+}
+
+var colours = { teal : "#69b3a2", grey : "#aaa" };
+
+var nestedData;
+var line;
+var dot;
+var x;
+var y;
+var selectedRegion;
+var yLabel;
+var chartLabel;
+var geojson;
+var measure = 'Age';
+var board = 'S08000020';
+
+function optionsAndUpdate()
+{
+	// recover the option that has been chosen
+	var selectedMeasure = d3.select("#categoryButton").property("value")
+	// run the updateChart function with this selected option
+	update(selectedRegion, selectedMeasure)
+}
+
+// A function that updates the chart
+function update(measure, board) {
+
+}
+
+// Parse the csv file
+function parseData(d) {
+	
+	d.Year = +d.Year;
+	d.Value = +d.Value;
+	
+	return d;
+}
+
+
+//Read the data
+d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup)
+{
+	lookup.reduce(function(map, obj) {
+		codesMap.set(obj.code, obj.name);
+	}, {});
+	
+	selectedRegion = lookup[0].code;
+	
+	d3.json('sco_nhs_boards.geojson', function(err, json) {
+		d3.csv("terminations data.csv", parseData, function(theData) {
+		
+			nestedData = d3.nest()
+							.key(function(d) { return d.ID; })
+							.key(function(d) { return d.Measure; })
+							.key(function(d) { return d.Year; })
+							//.key(function(d) { return d.Group; })
+							.entries(theData);
+							
+			catNestedData = d3.nest()
+							.key(function(d) { return d.Measure; })
+							.key(function(d) { return d.Group; })
+							.entries(theData);
+			
+			var boardData = nestedData.filter(function(e) 
+			{
+				return e['key'] == board;
+			});
+			var categoryData = boardData[0].values.filter(function(f)
+			{	return f['key'] == measure;
+			})
+			
+			var allCategories = catNestedData.filter(function(f)
+			{    return f['key'] == measure;
+			});
+			
+			var categories = allCategories[0].values.map( function(d) { return d.key; });
+			
+			color = d3.scaleOrdinal()
+					.domain(categories)
+					.range(d3.schemeSet3)
+			
+			var numYears = categoryData[0].values.length;
+			
+			var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
+			//console.log(merged);
+				
+			geojson = json;
+		
+			updateGeo(json);
+			
+
+
+	var areaGenerator = d3.area()
+	.x(function(d, i) {
+		return xScale(i);
+	})
+	.y0(function(d) {
+		return yScale(d[0]);
+	})
+	.y1(function(d) {
+		return yScale(d[1]);
+	});
+
+	var colors = ['#FBB65B', '#513551', '#de3163'];
+	
+	//console.log(data);
+
+   var stacker = d3.stack()
+   .keys(categories)
+	
+	var stackedData = stacker(merged);
+	console.log(stackedData);
+	
+	
+	var yScale = d3.scaleLinear()
+				.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
+				.range([height, 0]);
+			
+	var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth])
+	console.log(d3.max(stackedData, d => d3.max(d, d => d[1])));
+	
+
+
+	d3.select('g')
+	.selectAll('path')
+	.data(stackedData)
+	.enter()
+	.append('path')
+	.style('fill', function(d, i) {
+		return color(d.key);
+	})
+	.attr('d', areaGenerator)
+
+			
+		})
+	})
+})
+
+
+</script>
+</body>
+</html>
