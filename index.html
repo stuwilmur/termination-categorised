@@ -148,12 +148,12 @@ mapTooltip
   
   d3.select(this)
 	.style('fill', colours.teal)
-	.style("opacity", d.properties.LAD13CD == selectedRegion ? 1 : 0.5)
+	.style("opacity", d.properties.HBCode == selectedBoard ? 1 : 0.5)
 }
 
 var mapmousemove = function(d) {
 mapTooltip
-  .html(codesMap.get(d.properties.LAD13CD))
+  .html(codesMap.get(d.properties.HBCode))
   .style("left", (d3.mouse(this)[0] + 20) + "px")
   .style("top", (d3.mouse(this)[1]) + "px")
 }
@@ -168,21 +168,15 @@ mapTooltip
 }
 
 var mapmouseclick = function(d) {
-	selectedRegion = d.properties.LAD13CD;
+	//console.log(d.properties.HBCode);
+	//selectedBoard = d.properties.HBCode;
+	//update(selectedMeasure, selectedBoard);
+	//updateRegionColours();
+	
+	d3.select("#boardButton")
+	.property('value', d.properties.HBCode);
 	optionsAndUpdate();
-	updateRegionColours();
 }
-
-var categoriesList = [
-	[
-		"age",
-		"Age"
-	]
-];
-
-var firstCategory = categoriesList[0][0];
-
-var categories = new Map(categoriesList);
 
 var projection = d3.geoMercator()
   .scale(2600)
@@ -193,12 +187,12 @@ var geoGenerator = d3.geoPath()
   .projection(projection);
 
 function getRegionColour(d) { 
-	return d.properties.HB16CD == selectedRegion ? colours.teal : colours.grey;
+	return d.properties.HBCode == selectedBoard ? colours.teal : colours.grey;
 }
 
 function updateGeo(geojson) {
   var u = d3.select('svg')
-    .selectAll('path')
+    .selectAll('path.region')
     .data(geojson.features);
 
 	u.enter()
@@ -252,6 +246,8 @@ function optionsAndUpdate()
 // A function that updates the chart
 function update(measure, board) {
 
+	updateRegionColours();
+
 	var boardData = nestedData.filter(function(e) 
 	{
 		return e['key'] == board;
@@ -271,6 +267,12 @@ function update(measure, board) {
 			.range(d3.schemeSet3)
 	
 	var numYears = categoryData[0].values.length;
+	
+	var dates = categoryData[0].values.map(function(d) {return +d.key; })
+	
+	var firstDate = new Date(dates[0],0,0);
+	var lastDate = new Date(dates[dates.length - 1],0,0);
+	console.log(lastDate);
 	
 	var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
 
@@ -297,14 +299,15 @@ function update(measure, board) {
 				.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
 				.range([height, 0]);
 			
-	var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth]);
+	var xScale = d3.scaleTime().domain([0, numYears]).range([0, chartWidth]);
+	var xScaleDate = d3.scaleTime().domain([firstDate, lastDate]).range([0, chartWidth]);
 	
-	console.log(stackedData);
+	//console.log(stackedData);
 	
 	var w = d3.select('g').selectAll('path.layers')
 	.data(stackedData)
 	
-	console.log(w.enter());
+	//console.log(w.enter());
 	
 	w.enter()
 	.append('path')
@@ -322,6 +325,22 @@ function update(measure, board) {
 	.duration(durationTime)
 	.style('fill', 'none')
 	.remove();
+	
+	d3.select('g')
+	.transition()
+	.duration(durationTime)
+    .call(d3.axisLeft(yScale));
+	
+	d3.selectAll('.xscale')
+	.remove();
+	
+	var xscaleOffset = height + margin.bottom;
+	
+	d3.select('svg')
+	.append("g")
+	.attr("class", "xscale")
+	.attr("transform", "translate("+margin.left+"," + xscaleOffset + ")")
+	.call(d3.axisBottom(xScaleDate));
 }
 
 // Parse the csv file
@@ -342,6 +361,8 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 	}, {});
 	
 	var codesArray = Array.from(codesMap);
+	
+	console.log(codesMap);
 	
 	d3.json('sco_nhs_boards.geojson', function(err, json) {
 		d3.csv("terminations data.csv", parseData, function(theData) {
