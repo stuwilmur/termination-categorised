@@ -356,6 +356,8 @@ function parseData(d) {
 //Read and parse the data
 d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup)
 {
+	console.log(lookup);
+
 	lookup.reduce(function(map, obj) {
 		codesMap.set(obj.HB16CD, obj.HB16NM);
 	}, {});
@@ -438,41 +440,6 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 
 			updateGeo(geojson);
 			
-			/*
-			var areaGenerator = d3.area()
-			.x(function(d, i) {
-				return xScale(i);
-			})
-			.y0(function(d) {
-				return yScale(d[0]);
-			})
-			.y1(function(d) {
-				return yScale(d[1]);
-			});
-
-		   var stacker = d3.stack()
-		   .keys(categories)
-			
-			var stackedData = stacker(merged);
-			
-			
-			var yScale = d3.scaleLinear()
-						.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
-						.range([height, 0]);
-					
-			var xScale = d3.scaleLinear().domain([0, numYears]).range([0, chartWidth])
-			
-			d3.select('g')
-			.selectAll('path.layers')
-			.data(stackedData)
-			.enter()
-			.append('path')
-			.attr('class', 'layers')
-			.style('fill', function(d, i) {
-				return color(d.key);
-			})
-			.attr('d', areaGenerator)
-			*/
 			optionsAndUpdate();
 			
 		})
