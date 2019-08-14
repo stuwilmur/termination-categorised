@@ -59,6 +59,10 @@
 
 	a:visited {
 	  color: black;
+	  
+	.tooltip {
+		pointer-events: none;
+	}
 }
 
 
@@ -131,14 +135,16 @@ Tooltip
 
 var mousemove = function(d) {
 Tooltip
-  .html(d.year + ": " + d.value)
+  .html(d.key)
   .style("left", (d3.mouse(this)[0]+70) + "px")
   .style("top", (d3.mouse(this)[1]) + "px")
+  labelArea(d);
 }
 
 var mouseleave = function(d) {
 Tooltip
   .style("opacity", 0)
+d3.select("svg").selectAll("text.data").remove();
 }
 
 // Three function that change the map tooltip when user hover / move / leave a feature
@@ -216,6 +222,14 @@ function updateRegionColours()
 	.style("fill", getRegionColour);
 }
 
+function formatX(x)
+{
+	if (x.toFixed(0) == x)
+		return x;
+	else
+		return x.toFixed(1);	
+}
+
 var colours = { teal : "#69b3a2", grey : "#aaa" };
 
 var nestedData;
@@ -233,6 +247,9 @@ var nestedData;
 var catNestedData;
 var measures;
 var durationTime = 1000; //1s
+var yScale;
+var xScale;
+var rectSize = 20;
 
 function optionsAndUpdate()
 {
@@ -241,6 +258,26 @@ function optionsAndUpdate()
 	selectedBoard = d3.select("#boardButton").property("value");
 	// run the updateChart function with this selected option
 	update(selectedMeasure, selectedBoard);
+}
+
+function labelArea(d)
+{
+	var labels = d3.select("svg").selectAll("text.data");
+
+	
+	labels.data(d)
+	.enter()
+	.append("text")
+	.merge(labels)
+	.attr("class","data")
+	.attr("x", function(d,i) {return xScale(i);})
+	.attr("y", function(d) {return yScale(d[1]);})
+	.text(function(d,i) { return formatX(d[1]-d[0]);})
+	.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+	.style("font-size", "80%")
+	.style("pointer-events", "none");
+	
+	labels.exit().remove();
 }
 
 // A function that updates the chart
@@ -272,7 +309,6 @@ function update(measure, board) {
 	
 	var firstDate = new Date(dates[0],0,0);
 	var lastDate = new Date(dates[dates.length - 1],0,0);
-	console.log(lastDate);
 	
 	var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
 
@@ -295,14 +331,14 @@ function update(measure, board) {
 	var stackedData = stacker(merged);
 	
 	
-	var yScale = d3.scaleLinear()
+	yScale = d3.scaleLinear()
 				.domain([0, d3.max(stackedData, d => d3.max(d, d => d[1]))]).nice()
 				.range([height, 0]);
 			
-	var xScale = d3.scaleTime().domain([0, numYears]).range([0, chartWidth]);
+	xScale = d3.scaleTime().domain([0, numYears]).range([0, chartWidth]);
 	var xScaleDate = d3.scaleTime().domain([firstDate, lastDate]).range([0, chartWidth]);
 	
-	//console.log(stackedData);
+	console.log(stackedData);
 	
 	var w = d3.select('g').selectAll('path.layers')
 	.data(stackedData)
@@ -311,6 +347,9 @@ function update(measure, board) {
 	
 	w.enter()
 	.append('path')
+	.on("mouseover", mouseover)
+	.on("mousemove", mousemove)
+	.on("mouseleave",mouseleave)
 	.merge(w)
 	.transition()
 	.duration(durationTime)
@@ -341,6 +380,57 @@ function update(measure, board) {
 	.attr("class", "xscale")
 	.attr("transform", "translate("+margin.left+"," + xscaleOffset + ")")
 	.call(d3.axisBottom(xScaleDate));
+	
+	var legend = d3.select("g").selectAll("rect.legend")
+	.data(stackedData)
+	
+	legend.enter()
+	.append("rect")
+	.merge(legend)
+	.transition()
+	.duration(durationTime)
+	.attr("class","legend")
+	.style("fill", function(d,i) {
+		return color(d.key);
+		})
+	.attr("width", rectSize)
+	.attr("height", rectSize)
+	.attr("x", chartWidth)
+	.attr("y", function(d,i) {return i * (rectSize + 10);});
+	
+	legend.exit()
+	.transition()
+	.duration(durationTime)
+	.style('fill', 'none')
+	.remove();
+	
+	var legendText = d3.select("g").selectAll("text.legendtext")
+	.data(stackedData)
+	
+	legendText.enter()
+	.append("text")
+	.merge(legendText)
+	.transition()
+	.duration(durationTime)
+	.attr("class","legendtext")
+	.style("fill", function(d,i) {
+		//return color(d.key);
+		return "black";
+		})
+	.attr("x", chartWidth + rectSize + 10)
+	.attr("y", function(d,i) {return i * (rectSize + 10) + 10;})
+	.style("font-family", "Merriweather")
+	.style("font-size", "120%")
+	.attr("text-anchor", "start")
+	.text(function(d) {console.log(d.key); return d.key;});
+	
+	legendText.exit()
+	.transition()
+	.duration(durationTime)
+	.style('fill', 'none')
+	.remove();
+	
+	
 }
 
 // Parse the csv file
@@ -356,7 +446,7 @@ function parseData(d) {
 //Read and parse the data
 d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup)
 {
-	console.log(lookup);
+	//console.log(lookup);
 
 	lookup.reduce(function(map, obj) {
 		codesMap.set(obj.HB16CD, obj.HB16NM);
@@ -364,7 +454,7 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 	
 	var codesArray = Array.from(codesMap);
 	
-	console.log(codesMap);
+	//console.log(codesMap);
 	
 	d3.json('sco_nhs_boards.geojson', function(err, json) {
 		d3.csv("terminations data.csv", parseData, function(theData) {
