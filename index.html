@@ -83,6 +83,7 @@
 <script>
 
 var codesMap = new Map();
+var measuresMap = new Map();
 
 // set the dimensions and margins of the graph
 var margin = {top: 20, right: 100, bottom: 30, left: 70},
@@ -173,12 +174,7 @@ mapTooltip
 	.style("opacity", 1)
 }
 
-var mapmouseclick = function(d) {
-	//console.log(d.properties.HBCode);
-	//selectedBoard = d.properties.HBCode;
-	//update(selectedMeasure, selectedBoard);
-	//updateRegionColours();
-	
+var mapmouseclick = function(d) {	
 	d3.select("#boardButton")
 	.property('value', d.properties.HBCode);
 	optionsAndUpdate();
@@ -250,6 +246,7 @@ var durationTime = 1000; //1s
 var yScale;
 var xScale;
 var rectSize = 20;
+var rectMargin = 10;
 
 function optionsAndUpdate()
 {
@@ -303,12 +300,12 @@ function update(measure, board) {
 			.domain(categories)
 			.range(d3.schemeSet3)
 	
-	var numYears = categoryData[0].values.length;
+	var numYears = categoryData[0].values.length - 1;
 	
 	var dates = categoryData[0].values.map(function(d) {return +d.key; })
 	
 	var firstDate = new Date(dates[0],0,0);
-	var lastDate = new Date(dates[dates.length - 1],0,0);
+	var lastDate = new Date(dates[dates.length - 1],0,1); // add a day to make sure the scale hits the last year
 	
 	var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
 
@@ -338,12 +335,8 @@ function update(measure, board) {
 	xScale = d3.scaleTime().domain([0, numYears]).range([0, chartWidth]);
 	var xScaleDate = d3.scaleTime().domain([firstDate, lastDate]).range([0, chartWidth]);
 	
-	console.log(stackedData);
-	
 	var w = d3.select('g').selectAll('path.layers')
 	.data(stackedData)
-	
-	//console.log(w.enter());
 	
 	w.enter()
 	.append('path')
@@ -395,8 +388,8 @@ function update(measure, board) {
 		})
 	.attr("width", rectSize)
 	.attr("height", rectSize)
-	.attr("x", chartWidth)
-	.attr("y", function(d,i) {return i * (rectSize + 10);});
+	.attr("x", chartWidth + rectMargin)
+	.attr("y", function(d,i) {return i * (rectSize + rectMargin);});
 	
 	legend.exit()
 	.transition()
@@ -417,18 +410,31 @@ function update(measure, board) {
 		//return color(d.key);
 		return "black";
 		})
-	.attr("x", chartWidth + rectSize + 10)
-	.attr("y", function(d,i) {return i * (rectSize + 10) + 10;})
+	.attr("x", chartWidth + rectSize + 2 * rectMargin)
+	.attr("y", function(d,i) {return i * (rectSize + rectMargin) + rectMargin;})
 	.style("font-family", "Merriweather")
 	.style("font-size", "120%")
 	.attr("text-anchor", "start")
-	.text(function(d) {console.log(d.key); return d.key;});
+	.text(function(d) {return d.key;});
 	
 	legendText.exit()
 	.transition()
 	.duration(durationTime)
 	.style('fill', 'none')
 	.remove();
+	
+	// update y label
+	ylabel
+	.transition()
+	.duration(500)
+	.style("opacity",0)
+	
+	ylabel
+	.transition()
+	.delay(500)
+	.duration(500)
+	.style("opacity",1)
+	.text(measuresMap.get(selectedMeasure).unit);
 	
 	
 }
@@ -446,92 +452,103 @@ function parseData(d) {
 //Read and parse the data
 d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup)
 {
-	//console.log(lookup);
-
 	lookup.reduce(function(map, obj) {
 		codesMap.set(obj.HB16CD, obj.HB16NM);
 	}, {});
 	
 	var codesArray = Array.from(codesMap);
 	
-	//console.log(codesMap);
-	
 	d3.json('sco_nhs_boards.geojson', function(err, json) {
 		d3.csv("terminations data.csv", parseData, function(theData) {
+			d3.csv("measures_descriptors.csv", function(measures) {
+			
+				measures.reduce(function(map, obj) {
+					measuresMap.set(obj.measure, obj);
+				}, {});
 		
-			geojson = json;
-		
-			nestedData = d3.nest()
-							.key(function(d) { return d.ID; })
-							.key(function(d) { return d.Measure; })
-							.key(function(d) { return d.Year; })
-							//.key(function(d) { return d.Group; })
-							.entries(theData);
-							
-			catNestedData = d3.nest()
-							.key(function(d) { return d.Measure; })
-							.key(function(d) { return d.Group; })
-							.entries(theData);
-							
-			measures = catNestedData.map( function(d) { return d.key; })
+				geojson = json;
 			
-			// add the options to the measures button
-			d3.select('#measureButton')
-				.on('change', function(d) 
-				{
-					optionsAndUpdate();
-					//!!
-				})
-				.selectAll('option')
-				.data(measures)
-				.enter()
-				.append('option')
-				.attr('value', function(d) {return d;})
-				.text(function(d) {return d;});
+				nestedData = d3.nest()
+								.key(function(d) { return d.ID; })
+								.key(function(d) { return d.Measure; })
+								.key(function(d) { return d.Year; })
+								//.key(function(d) { return d.Group; })
+								.entries(theData);
+								
+				catNestedData = d3.nest()
+								.key(function(d) { return d.Measure; })
+								.key(function(d) { return d.Group; })
+								.entries(theData);
+								
+				measures = catNestedData.map( function(d) { return d.key; })
 				
-			// add the options to the boards button
-			d3.select('#boardButton')
-				.on('change', function(d) 
-				{
-					optionsAndUpdate();
-					//!!
-				})
-				.selectAll('option')
-				.data(codesArray)
-				.enter()
-				.append('option')
-				.attr('value', function(d) {return d[0];})
-				.text(function(d) {return d[1];});
+				// add the options to the measures button
+				d3.select('#measureButton')
+					.on('change', function(d) 
+					{
+						optionsAndUpdate();
+						//!!
+					})
+					.selectAll('option')
+					.data(measures)
+					.enter()
+					.append('option')
+					.attr('value', function(d) {return d;})
+					.text(function(d) {return measuresMap.get(d).description;});
+					
+				// add the options to the boards button
+				d3.select('#boardButton')
+					.on('change', function(d) 
+					{
+						optionsAndUpdate();
+						//!!
+					})
+					.selectAll('option')
+					.data(codesArray)
+					.enter()
+					.append('option')
+					.attr('value', function(d) {return d[0];})
+					.text(function(d) {return d[1];});
+					
+				var measure = d3.select("#measureButton").property("value");
+				var board = d3.select("#boardButton").property("value");	
 				
-			var measure = d3.select("#measureButton").property("value");
-			var board = d3.select("#boardButton").property("value");	
-			
-			var boardData = nestedData.filter(function(e) 
-			{
-				return e['key'] == board;
-			});
-			var categoryData = boardData[0].values.filter(function(f)
-			{	return f['key'] == measure;
-			})
-			
-			var allCategories = catNestedData.filter(function(f)
-			{    return f['key'] == measure;
-			});
-			
-			var categories = allCategories[0].values.map( function(d) { return d.key; });
-			
-			color = d3.scaleOrdinal()
-					.domain(categories)
-					.range(d3.schemeSet3)
-			
-			var numYears = categoryData[0].values.length;
-			
-			var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
+				var boardData = nestedData.filter(function(e) 
+				{
+					return e['key'] == board;
+				});
+				var categoryData = boardData[0].values.filter(function(f)
+				{	return f['key'] == measure;
+				})
+				
+				var allCategories = catNestedData.filter(function(f)
+				{    return f['key'] == measure;
+				});
+				
+				var categories = allCategories[0].values.map( function(d) { return d.key; });
+				
+				color = d3.scaleOrdinal()
+						.domain(categories)
+						.range(d3.schemeSet3)
+				
+				var numYears = categoryData[0].values.length;
+				
+				var merged = categoryData[0].values.map(function(d) {var obj = d.values.reduce(function(acc, cur, i) {acc[cur.Group] = cur.Value; return acc;}, {}); obj.Year = d.key; return obj;})
+				
+				ylabel = d3.select("svg")
+				.append("text")
+				.attr("class", "ylabel")
+				.attr("text-anchor", "start")
+				.attr("alignment-baseline", "hanging")
+				.attr("x",-height/2 - margin.top)
+				.attr("y",5)
+				.attr("transform", "rotate(-90)")
+				.text(measuresMap.get(selectedMeasure).unit);
 
-			updateGeo(geojson);
-			
-			optionsAndUpdate();
-			
+				updateGeo(geojson);
+				
+				optionsAndUpdate();
+			})
 		})
 	})
 })
