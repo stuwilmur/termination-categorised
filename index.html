@@ -32,12 +32,18 @@
 	        font-family: 'Merriweather', serif;
 	}
 	
+	.notes {
+		font-size : 75%;
+		display : none;
+		width : 70%;
+	}
+	
 	.ylabel {
 		font-size : 80%;
 	}
 	
 	.caption {
-		font-size : 120%;
+		font-size : 130%;
 	}
 	
 	.subcaption {
@@ -79,6 +85,22 @@
 <div id="my_dataviz"></div>
 <p class="caption">Termination of pregnancy in Scotland across health board categorised by age, deprivation, estimated gestation,  method and grounds for termination.</p>
 <p class="subcaption">Data from the <a href="https://www.isdscotland.org/Health-Topics/Sexual-Health/Publications/2019-05-28/2019-05-28-Terminations-2018-Report.pdf">Termination of Pregnancy report, Information Services Division Scotland, published 28 May 2019</a>.</p>
+<button type="button" id="notesButton">Show/hide notes</button>
+<div class="notes">
+<ul>
+<li>Terminations of pregnancy refers to therapeutic abortions notified in accordance with the Abortion Act 1967.</li>
+<li> N.B. Some data are provisional. For display purposes, items for which there are no data available or where the value has been surpressed due to the potential risk of disclosure appear as as zeros.</li											
+<li>Islands describes Orkney, Shetland and Western Isles NHS Board areas.</li>											
+<li>Other/unknown describes patients resident outwith Scotland or Scottish residents who cannot be assigned to an NHS Board.</li>											
+<li>For each year the most appropriate SIMD release was used: 2009 uses SIMD 2009; 2010 to 2013 uses SIMD 2012; 2014 onwards uses SIMD 2016. Further information about SIMD can be found at <a href = "http://www.isdscotland.org/Products-and-Services/GPD-Support/Deprivation/SIMD/"> idscotland SIMD</a>.</li>														
+<li>Some cases could not be assigned to an SIMD quintile.</li> 														
+<li>Grounds for abortion: as some notifications record more than one Statutory Ground, the numbers and percentages of Grounds may exceed the total number of pregnancies.</li>														
+<li>See Glossary for definitions of Statutory Grounds.</li>																												
+<li>On 1st April 2014, NHS Board boundaries were changed to align with local authorities to allow them to work closer together in the provision of care in the local community. To allow direct comparisons over time between NHS boards, this alignment has been applied to pre-2014 data. Further information is available at <a href=" http://www.isdscotland.org/Products-and-Services/GPD-Support/Geography/NHS-Board-Boundary-Changes/">idscotland NHS Board Changes</a>.</li>	
+<li>Source :  Notifications (to the Chief Medical Officer for Scotland) of abortions performed under the Abortion Act 1967, ISD.</li>														
+</ul>												
+												
+</div>
 
 <script>
 
@@ -224,6 +246,17 @@ function formatX(x)
 		return x;
 	else
 		return x.toFixed(1);	
+}
+
+function toggleNotes()
+{
+	var n =  d3.selectAll(".notes");
+	
+	var newDisplay = n.style("display") == "block" ? "none" : "block";
+	
+	n.transition()
+	.duration(durationTime)
+	.style("display",newDisplay);
 }
 
 var colours = { teal : "#69b3a2", grey : "#aaa" };
@@ -509,6 +542,9 @@ d3.csv('Health_Boards_May_2016_Names_and_Codes_in_Scotland.csv', function(lookup
 					.append('option')
 					.attr('value', function(d) {return d[0];})
 					.text(function(d) {return d[1];});
+					
+				d3.select('#notesButton')
+				.on('click', toggleNotes);
 					
 				var measure = d3.select("#measureButton").property("value");
 				var board = d3.select("#boardButton").property("value");	
